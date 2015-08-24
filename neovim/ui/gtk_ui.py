@@ -156,6 +156,7 @@ class GtkUI(object):
     def preview_switch_active(self, switch, gparam):
         if switch.get_active():
             self.wbwin.set_visible(True)
+            self.update_wb()
         else:
             self.wbwin.set_visible(False)
         GLib.timeout_add(1, self._glib_nvim_resize)
@@ -374,7 +375,8 @@ class GtkUI(object):
         done = (False if state & SHIFT and keyval == ord(' ') else
                 False if Gdk.KEY_KP_Space <= keyval <= Gdk.KEY_KP_Divide else
                 self._im_context.filter_keypress(event))
-        self.update_wb()
+        if self._preview_switch.get_active():
+            self.update_wb()
         if done:
             # input method handled keypress
             return True
