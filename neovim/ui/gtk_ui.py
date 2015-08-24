@@ -102,9 +102,20 @@ class GtkUI(object):
         layout = Gtk.Box(spacing=1)
 
         window = Gtk.Window()
-        # hb = Gtk.HeaderBar()
-        # hb.props.title = "Neovim"
-        # window.set_titlebar(hb)
+        # TODO: Set window size (needs to set nvim's size too.)
+        hb = Gtk.HeaderBar()
+        hb.props.title = "Neovim"
+        hb.set_show_close_button(True)
+        window.set_titlebar(hb)
+
+        lbl = Gtk.Label()
+        lbl.set_text("Preview")
+        switch = Gtk.Switch()
+        switch.set_active(True)
+        switch.connect("notify::active", self.preview_switch_active)
+        hb.pack_end(switch)
+        hb.pack_end(lbl)
+        self._preview_switch = switch
 
         window.add(layout)
 
@@ -141,6 +152,13 @@ class GtkUI(object):
         self._im_context = im_context
         self._bridge = bridge
         Gtk.main()
+
+    def preview_switch_active(self, switch, gparam):
+        if switch.get_active():
+            self.wbwin.set_visible(True)
+        else:
+            self.wbwin.set_visible(False)
+        GLib.timeout_add(1, self._glib_nvim_resize)
 
     def quit(self):
         """Exit the UI event loop."""
@@ -183,7 +201,7 @@ class GtkUI(object):
         self._cell_pixel_width = cell_pixel_width
         self._cell_pixel_height = cell_pixel_height
         self._screen = Screen(columns, rows)
-        self._window.resize(pixel_width * 2, pixel_height)
+        #self._window.resize(pixel_width, self._window.get_allocated_height())
 
     def _nvim_normal_mode(self):
         pass
@@ -335,15 +353,6 @@ class GtkUI(object):
             self._pango_draw(row, col, [(text, attrs,)], cr=cr, cursor=True)
 
     def _gtk_configure(self, widget, event):
-        def resize(*args):
-            self._resize_timer_id = None
-            width, height = self._window.get_size()
-            columns = width / self._cell_pixel_width
-            rows = height / self._cell_pixel_height
-            if self._screen.columns == columns and self._screen.rows == rows:
-                return
-            self._bridge.resize(columns / 2, rows)
-
         if not self._screen:
             return
         if event.width == self._pixel_width and \
@@ -351,7 +360,7 @@ class GtkUI(object):
             return
         if self._resize_timer_id is not None:
             GLib.source_remove(self._resize_timer_id)
-        self._resize_timer_id = GLib.timeout_add(250, resize)
+        self._resize_timer_id = GLib.timeout_add(250, self._glib_nvim_resize)
 
     def _gtk_quit(self, *args):
         self._bridge.exit()
@@ -555,6 +564,17 @@ class GtkUI(object):
             rv = (n, c,)
             self._pango_attrs_cache[key] = rv
         return rv
+
+    def _glib_nvim_resize(self, *args):
+        self._resize_timer_id = None
+        width, height = self._window.get_size()
+        height = self._drawing_area.get_allocated_height()
+        width = self._drawing_area.get_allocated_width()
+        columns = width / self._cell_pixel_width
+        rows = height / self._cell_pixel_height
+        if self._screen.columns == columns and self._screen.rows == rows:
+            return
+        self._bridge.resize(columns, rows)
 
     def _reset_cache(self):
         self._pango_text_cache = {}
