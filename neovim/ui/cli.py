@@ -59,7 +59,7 @@ def main(ctx, prog, notify, listen, connect, profile):
         nvim = attach('child', argv=nvim_argv)
 
     from .gtk_ui import GtkUI
-    ui = GtkUI()
+    ui = GtkUI(nvim.command_output("echo $NVIM_LISTEN_ADDRESS")[1:])
     bridge = UIBridge()
     bridge.connect(nvim, ui, profile if profile != 'disable' else None, notify)
 

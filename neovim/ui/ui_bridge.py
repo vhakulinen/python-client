@@ -34,6 +34,10 @@ class UIBridge(object):
         self.detach()
         self._call(self._nvim.quit)
 
+    @property
+    def nvim(self):
+        return self._nvim
+
     def input(self, input_str):
         """Send input to nvim."""
         self._call(self._nvim.input, input_str)

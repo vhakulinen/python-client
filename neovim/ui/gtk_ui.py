@@ -3,8 +3,11 @@ import math
 
 import cairo
 
-from gi.repository import GLib, GObject, Gdk, Gtk, Pango, PangoCairo
+from gi.repository import GLib, GObject, Gdk, Gtk, Pango, PangoCairo, WebKit
 
+import markdown2
+
+from .. import attach
 from .screen import Screen
 
 
@@ -62,8 +65,9 @@ class GtkUI(object):
 
     """Gtk+ UI class."""
 
-    def __init__(self):
+    def __init__(self, nvim_arg):
         """Initialize the UI instance."""
+        self._arg = nvim_arg
         self._redraw_arg = None
         self._foreground = -1
         self._background = -1
@@ -81,14 +85,40 @@ class GtkUI(object):
         self._invalid = None
         self._pending = [0, 0, 0]
         self._reset_cache()
+        self.n = attach(*("socket",), **{'path': self._arg})
+
+    def update_wb(self):
+        buf = ""
+        for content in self.n.current.buffer:
+            buf += content + "\n"
+        m = markdown2.Markdown()
+        self.wb.load_html_string(m.convert(buf), "")
 
     def start(self, bridge):
         """Start the UI event loop."""
         bridge.attach(80, 24, True)
         drawing_area = Gtk.DrawingArea()
         drawing_area.connect('draw', self._gtk_draw)
+        layout = Gtk.Box(spacing=1)
+
         window = Gtk.Window()
-        window.add(drawing_area)
+        # hb = Gtk.HeaderBar()
+        # hb.props.title = "Neovim"
+        # window.set_titlebar(hb)
+
+        window.add(layout)
+
+        layout.pack_start(drawing_area, True, True, 0)
+
+        self.wb = WebKit.WebView()
+        settings = WebKit.WebSettings()
+        settings.props.enable_plugins = False
+        settings.props.enable_scripts = False
+        self.wb.set_settings(settings)
+        self.wbwin = Gtk.ScrolledWindow()
+        self.wbwin.add(self.wb)
+        layout.pack_start(self.wbwin, True, True, 0)
+
         window.set_events(window.get_events() |
                           Gdk.EventMask.BUTTON_PRESS_MASK |
                           Gdk.EventMask.BUTTON_RELEASE_MASK |
@@ -106,6 +136,7 @@ class GtkUI(object):
         im_context.connect('commit', self._gtk_input)
         self._pango_context = drawing_area.create_pango_context()
         self._drawing_area = drawing_area
+        self._layout = layout
         self._window = window
         self._im_context = im_context
         self._bridge = bridge
@@ -152,7 +183,13 @@ class GtkUI(object):
         self._cell_pixel_width = cell_pixel_width
         self._cell_pixel_height = cell_pixel_height
         self._screen = Screen(columns, rows)
-        self._window.resize(pixel_width, pixel_height)
+        self._window.resize(pixel_width * 2, pixel_height)
+
+    def _nvim_normal_mode(self):
+        pass
+
+    def _nvim_insert_mode(self):
+        pass
 
     def _nvim_clear(self):
         self._clear_region(self._screen.top, self._screen.bot + 1,
@@ -305,7 +342,7 @@ class GtkUI(object):
             rows = height / self._cell_pixel_height
             if self._screen.columns == columns and self._screen.rows == rows:
                 return
-            self._bridge.resize(columns, rows)
+            self._bridge.resize(columns / 2, rows)
 
         if not self._screen:
             return
@@ -328,6 +365,7 @@ class GtkUI(object):
         done = (False if state & SHIFT and keyval == ord(' ') else
                 False if Gdk.KEY_KP_Space <= keyval <= Gdk.KEY_KP_Divide else
                 self._im_context.filter_keypress(event))
+        self.update_wb()
         if done:
             # input method handled keypress
             return True
